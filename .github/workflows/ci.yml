@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  docker:
+    name: Build + probe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # amd64 only here — the release workflow builds linux/amd64 +
+      # linux/arm64 on tag push. A single native arch is enough to prove
+      # the image builds and the probe passes.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: promptarena-sandbox:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Probe — brief present, /workspace empty, tools on PATH, sandbox uid
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint sh promptarena-sandbox:ci -c '
+            set -eu
+
+            # This image mounts a PromptArena project at /workspace on a
+            # project-bound sandbox, so the brief must live outside it.
+            [ -z "$(ls -A /workspace 2>/dev/null)" ] || { echo "/workspace is not empty" >&2; exit 1; }
+            test -f /opt/promptarena/brief/AGENTS.md
+            test -d /opt/promptarena/brief/.claude/skills/promptarena-authoring
+
+            promptarena --version >/dev/null
+            # packc is not cobra-based: it takes "version" as a bare
+            # subcommand, not a "--version" flag ("packc --version" hits
+            # its unknown-command branch and exits 1).
+            packc version >/dev/null
+
+            # Must not be running as root.
+            [ "$(id -u)" -ne 0 ] || { echo "running as root" >&2; exit 1; }
+
+            echo "brief present, /workspace empty, promptarena+packc on PATH, uid=$(id -u)"
+          '
