@@ -58,3 +58,18 @@ jobs:
 
             echo "brief present, /workspace empty, promptarena+packc on PATH, uid=$(id -u)"
           '
+
+      - name: Probe offline validate and run
+        # The sandbox has no network. promptarena must validate and run a
+        # kit from the image's own schemas (/schemas/v1alpha1), never by
+        # fetching them.
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --entrypoint sh promptarena-sandbox:ci -c '
+            set -eu
+            cd /tmp && promptarena init kit --quick --provider mock >/dev/null
+            cd /tmp/kit
+            promptarena validate config.arena.yaml
+            timeout 120 promptarena run --ci --formats json >/dev/null
+            echo "offline validate + run OK"
+          '

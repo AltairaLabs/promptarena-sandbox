@@ -62,4 +62,19 @@ USER root
 RUN mkdir -p /opt/promptarena/brief \
     && /usr/local/bin/promptarena agent-brief /opt/promptarena/brief \
     && chown -R sandbox:sandbox /opt/promptarena
+
+# Offline schemas. The sandbox has no network, and promptarena's config
+# loading (`validate`, `run`, and packc) fetches each JSON schema from
+# https://promptkit.altairalabs.ai unless PROMPTKIT_SCHEMA_SOURCE=local. In
+# local mode it looks for schemas/v1alpha1/<type>.json relative to the
+# working directory and up to three parents — so /schemas/v1alpha1 is found
+# from /workspace and anything below it, without writing into the project.
+# The files are the CLI's own embedded schemas, so they always match the
+# pinned promptarena version.
+RUN mkdir -p /schemas/v1alpha1 \
+    && for t in $(/usr/local/bin/promptarena schema --list); do \
+         /usr/local/bin/promptarena schema "$t" > "/schemas/v1alpha1/$t.json"; \
+       done \
+    && test -s /schemas/v1alpha1/arena.json
+ENV PROMPTKIT_SCHEMA_SOURCE=local
 USER sandbox
