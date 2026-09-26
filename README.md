@@ -20,6 +20,16 @@ codegen-sandbox digest, with the PromptArena tooling layered on top.
   `.claude/skills/promptarena-authoring/` skill (including its reference
   docs), written by `promptarena agent-brief` at build time.
 
+## Offline schemas
+
+The sandbox has no network, but promptarena's config loading fetches its JSON
+schemas from `https://promptkit.altairalabs.ai` unless
+`PROMPTKIT_SCHEMA_SOURCE=local`. The image writes the CLI's own embedded
+schemas to `/schemas/v1alpha1` and sets that variable, so `promptarena
+validate`, `promptarena run` and `packc` work from `/workspace` (local mode
+looks in `schemas/v1alpha1` relative to the working directory and up to three
+parents). CI probes this with `--network none`.
+
 ## Why the brief isn't in `/workspace`
 
 Most codegen-sandbox variants brief `/workspace` directly, because
